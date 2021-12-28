@@ -1,6 +1,7 @@
 ﻿using BepInEx;
-using BepInEx.Configuration;
+using BepInEx.Logging;
 using DiskCardGame;
+using HarmonyLib;
 using System;
 using System.Collections.Generic;
 
@@ -18,6 +19,10 @@ namespace Act3Items {
 			"ShieldGenerator"
 		};
 
+		public static ManualLogSource logger;
+
+		internal static List<ConsumableItemData> AllDatas = new List<ConsumableItemData>();
+
 		public static Dictionary<string, string> NewDescriptions = new Dictionary<string, string>() {
 			{"BombRemote", "Mrs. Bomb's Remote. Using it, you may fill the battlefield with Explode Bots." },
 			{"Battery", "An extra battery. It will replenish your energy to its maximum." },
@@ -31,23 +36,45 @@ namespace Act3Items {
 		};
 
 		private void Awake() {
+			logger = Logger;
+
 			Logger.LogWarning("Act3Items has only been tested in the Kaycee's Mod Beta. Although it may work in the base game, don't expect any support for it.");
 
 			foreach (var item in ItemsUtil.AllConsumables) { // iterate through all items
 				Logger.LogDebug($"Name: {item.name} - Display Name: {item.rulebookName}"); // log info abt item
 				if (AllItems.Contains(item.name)) { // if this item is one of the act 3 ones
 					item.regionSpecific = false; // make it non-region specific, this will allow it to be accessed in act 1
+
 					item.rulebookCategory = AbilityMetaCategory.Part1Rulebook; // make it appear in act 1 rulebook
+
 					if (Config.Bind("General", "ChangeQuips", true, "Change the text that Leshy says when you find the item for the first time.").Value) {
 						// if allowed to, change the quip for the item
 						item.description = NewDescriptions[item.name];
 					}
+
 					if (Config.Bind("General", "ChangeRulebookDesc", true, "Change the rulebook description for the item.").Value) {
 						// if allowed to, change the description of the item
 						item.rulebookDescription = NewRulebookDescriptions[item.name];
 					}
+
+					AllDatas.Add(item); // for debugging
+
 					Logger.LogMessage($"Made item {item.name} usable in act 1"); // :)
 				}
+			}
+
+			if(Config.Bind("Dev", "TestMode", false, "Replaces all items with act 3 ones.").Value) {
+				new Harmony(GUID).PatchAll();
+			}
+		}
+
+		[HarmonyPatch(typeof(GainConsumablesSequencer))]
+		[HarmonyPatch("GenerateItemChoices")]
+		internal class Patcher {
+			static bool Prefix(GainConsumablesSequencer __instance, ref List<ConsumableItemData> __result) {
+				__result = AllDatas;
+				MainPlugin.logger.LogInfo($"Replaced item choices with {__result}");
+				return false;
 			}
 		}
 
